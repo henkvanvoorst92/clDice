@@ -4,24 +4,30 @@ import torch.nn.functional as F
 from .soft_skeleton import SoftSkeletonize
 
 class soft_cldice(nn.Module):
-    def __init__(self, iter_=3, smooth = 1., exclude_background=False):
+    def __init__(self, iter_=3, smooth = 1., y_true_is_skel=False, exclude_background=False):
         super(soft_cldice, self).__init__()
         self.iter = iter_
         self.smooth = smooth
         self.soft_skeletonize = SoftSkeletonize(num_iter=10)
         self.exclude_background = exclude_background
+        #Either choose to skeletonize y_true skeleton or to
+        #provide y_true as skeleton as additional channel
+        self.y_true_is_skel = y_true_is_skel
 
     def forward(self, y_true, y_pred):
         if self.exclude_background:
             y_true = y_true[:, 1:, :, :]
             y_pred = y_pred[:, 1:, :, :]
         skel_pred = self.soft_skeletonize(y_pred)
-        skel_true = self.soft_skeletonize(y_true)
+        if self.y_true_is_skel:
+            y_true = y_true[:, 0:1]
+            skel_true = y_true[:,1:2]
+        else:
+            skel_true = self.soft_skeletonize(y_true)
         tprec = (torch.sum(torch.multiply(skel_pred, y_true))+self.smooth)/(torch.sum(skel_pred)+self.smooth)    
         tsens = (torch.sum(torch.multiply(skel_true, y_pred))+self.smooth)/(torch.sum(skel_true)+self.smooth)    
         cl_dice = 1.- 2.0*(tprec*tsens)/(tprec+tsens)
         return cl_dice
-
 
 def soft_dice(y_true, y_pred):
     """[function to compute dice loss]
